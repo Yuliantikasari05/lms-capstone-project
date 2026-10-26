@@ -11,16 +11,15 @@ class CertificationController extends Controller
 {
     /**
      * Display a listing of certifications.
-     * Admin sees all applications; regular users (karyawan) see only their own.
+     * Managers (admin) see all applications; karyawan see only their own.
      */
     public function index(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $isAdmin = $user->roles()->where('name', 'admin')->exists();
+        $user = $request->user()->loadMissing('roles.permissions');
 
         $query = Certification::query()->latest();
 
-        if (! $isAdmin) {
+        if (! $user->hasPermission('certifications:manage')) {
             $query->where('user_id', $user->id);
         }
 
@@ -51,7 +50,7 @@ class CertificationController extends Controller
             'user_id' => $user->id,
             'employee_name' => $user->name,
             'email' => $user->email,
-            'company' => $request->input('company', 'Tech Corp Nusantara'),
+            'company' => $request->input('company'),
             'track' => $request->input('track'),
             'training_hours' => $request->input('training_hours'),
             'portfolio_url' => $request->input('portfolio_url'),
@@ -70,13 +69,9 @@ class CertificationController extends Controller
      */
     public function approve(Request $request, Certification $certification): JsonResponse
     {
-        $user = $request->user();
-        if (! $user->roles()->where('name', 'admin')->exists()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Hanya Administrator yang memiliki wewenang menerbitkan sertifikat.',
-            ], 403);
-        }
+        $request->validate([
+            'notes' => 'nullable|string|max:1000',
+        ]);
 
         $certNumber = $certification->certificate_number;
         if (! $certNumber) {
@@ -93,7 +88,7 @@ class CertificationController extends Controller
             'status' => 'issued',
             'certificate_number' => $certNumber,
             'issued_at' => now(),
-            'admin_notes' => $request->input('notes', 'Memenuhi seluruh standar kelayakan jam pelatihan dan portofolio teknis.'),
+            'admin_notes' => $request->input('notes'),
         ]);
 
         return response()->json([
@@ -108,17 +103,13 @@ class CertificationController extends Controller
      */
     public function reject(Request $request, Certification $certification): JsonResponse
     {
-        $user = $request->user();
-        if (! $user->roles()->where('name', 'admin')->exists()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Hanya Administrator yang memiliki wewenang menolak pengajuan.',
-            ], 403);
-        }
+        $request->validate([
+            'notes' => 'required|string|max:1000',
+        ]);
 
         $certification->update([
             'status' => 'rejected',
-            'admin_notes' => $request->input('notes', 'Jam pelatihan terverifikasi belum memenuhi standar minimum atau portofolio tidak lengkap.'),
+            'admin_notes' => $request->input('notes'),
         ]);
 
         return response()->json([

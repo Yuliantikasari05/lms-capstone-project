@@ -11,6 +11,8 @@ class CheckPermission
     /**
      * Handle an incoming request.
      *
+     * Accepts one permission or several separated by "|" (user needs any one of them).
+     *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
     public function handle(Request $request, Closure $next, string $permission): Response
@@ -31,7 +33,10 @@ class CheckPermission
             ], Response::HTTP_FORBIDDEN);
         }
 
-        if (! $user->hasPermission($permission)) {
+        $allowed = collect(explode('|', $permission))
+            ->contains(fn (string $name) => $user->hasPermission($name));
+
+        if (! $allowed) {
             return response()->json([
                 'success' => false,
                 'message' => "Akses ditolak. Anda tidak memiliki izin '{$permission}'.",

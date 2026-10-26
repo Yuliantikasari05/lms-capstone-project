@@ -7,10 +7,12 @@ use App\Http\Controllers\Api\V1\Assessment\AssignmentController;
 use App\Http\Controllers\Api\V1\Assessment\ExamController;
 use App\Http\Controllers\Api\V1\Assessment\ExamReviewController;
 use App\Http\Controllers\Api\V1\Assessment\StudentAssessmentController;
+use App\Http\Controllers\Api\V1\CertificationController;
 use App\Http\Controllers\Api\V1\Course\CourseController;
 use App\Http\Controllers\Api\V1\Course\LearnController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\ScheduleController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -30,7 +32,8 @@ Route::prefix('v1')->group(function () {
 
     // 2. Public Authentication Endpoints
     Route::prefix('auth')->group(function () {
-        Route::post('/login', [AuthController::class, 'login'])->name('api.v1.auth.login');
+        Route::post('/login', [AuthController::class, 'login'])
+            ->middleware('throttle:login')->name('api.v1.auth.login');
     });
 
     // 3. Authenticated Routes (Sanctum Session / Token)
@@ -104,18 +107,25 @@ Route::prefix('v1')->group(function () {
 
         // Certifications — Employee submits, Admin reviews and issues certificate
         Route::prefix('certifications')->group(function () {
-            Route::get('/', [\App\Http\Controllers\Api\V1\CertificationController::class, 'index'])->name('api.v1.certifications.index');
-            Route::post('/', [\App\Http\Controllers\Api\V1\CertificationController::class, 'store'])->name('api.v1.certifications.store');
-            Route::post('/{certification}/approve', [\App\Http\Controllers\Api\V1\CertificationController::class, 'approve'])->name('api.v1.certifications.approve');
-            Route::post('/{certification}/reject', [\App\Http\Controllers\Api\V1\CertificationController::class, 'reject'])->name('api.v1.certifications.reject');
+            Route::get('/', [CertificationController::class, 'index'])
+                ->middleware('permission:certifications:view_own|certifications:manage')->name('api.v1.certifications.index');
+            Route::post('/', [CertificationController::class, 'store'])
+                ->middleware('permission:certifications:apply')->name('api.v1.certifications.store');
+            Route::post('/{certification}/approve', [CertificationController::class, 'approve'])
+                ->middleware('permission:certifications:manage')->name('api.v1.certifications.approve');
+            Route::post('/{certification}/reject', [CertificationController::class, 'reject'])
+                ->middleware('permission:certifications:manage')->name('api.v1.certifications.reject');
         });
 
         // Schedules — Live Mentoring & Webinars (Mentor creates, Students/all roles view)
         Route::prefix('schedules')->group(function () {
-            Route::get('/', [\App\Http\Controllers\Api\V1\ScheduleController::class, 'index'])->name('api.v1.schedules.index');
-            Route::post('/', [\App\Http\Controllers\Api\V1\ScheduleController::class, 'store'])->name('api.v1.schedules.store');
-            Route::patch('/{schedule}/toggle-finished', [\App\Http\Controllers\Api\V1\ScheduleController::class, 'toggleFinished'])->name('api.v1.schedules.toggle_finished');
-            Route::delete('/{schedule}', [\App\Http\Controllers\Api\V1\ScheduleController::class, 'destroy'])->name('api.v1.schedules.destroy');
+            Route::get('/', [ScheduleController::class, 'index'])
+                ->middleware('permission:schedules:manage|sessions:attend|webinars:attend')->name('api.v1.schedules.index');
+            Route::middleware('permission:schedules:manage')->group(function () {
+                Route::post('/', [ScheduleController::class, 'store'])->name('api.v1.schedules.store');
+                Route::patch('/{schedule}/toggle-finished', [ScheduleController::class, 'toggleFinished'])->name('api.v1.schedules.toggle_finished');
+                Route::delete('/{schedule}', [ScheduleController::class, 'destroy'])->name('api.v1.schedules.destroy');
+            });
         });
 
         // Student learning — enrolled courses, catalog, lesson progress

@@ -16,7 +16,7 @@ class CreateAdminCommand extends Command
 
     public function handle(): int
     {
-        $adminRole = Role::where('slug', Role::ADMIN)->first();
+        $adminRole = Role::where('name', 'admin')->first();
 
         if (! $adminRole) {
             $this->error('Role admin belum ada. Jalankan `php artisan db:seed` terlebih dahulu.');
@@ -48,7 +48,7 @@ class CreateAdminCommand extends Command
 
         $admin = User::updateOrCreate(
             ['email' => $email],
-            ['name' => $name, 'password' => $password, 'status' => User::STATUS_ACTIVE]
+            ['name' => $name, 'password' => $password, 'is_active' => true]
         );
         $admin->roles()->syncWithoutDetaching([$adminRole->id]);
 

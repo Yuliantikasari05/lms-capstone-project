@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Permission;
+use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\RbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -62,5 +64,30 @@ class RbacAuthorizationTest extends TestCase
                     ],
                 ]);
         }
+    }
+
+    public function test_seeder_is_idempotent(): void
+    {
+        $roleCount = Role::count();
+        $permissionCount = Permission::count();
+
+        $this->seed(RbacSeeder::class);
+
+        $this->assertSame(5, $roleCount);
+        $this->assertSame($roleCount, Role::count());
+        $this->assertSame($permissionCount, Permission::count());
+    }
+
+    public function test_karyawan_permissions_are_all_defined_and_include_course_access(): void
+    {
+        $karyawan = User::factory()->create();
+        $karyawan->assignRole('karyawan');
+
+        $this->assertFalse(Permission::where('name', 'training:view')->exists());
+        $this->assertTrue($karyawan->hasPermission('courses:enrolled'));
+
+        $this->actingAs($karyawan, 'sanctum')
+            ->getJson('/api/v1/learn/courses')
+            ->assertStatus(200);
     }
 }

@@ -138,4 +138,120 @@ class ScheduleApiTest extends TestCase
             'id' => $schedule->id,
         ]);
     }
+
+    private function makeSchedule(User $mentor, array $overrides = []): MentorSchedule
+    {
+        return MentorSchedule::create(array_merge([
+            'mentor_id' => $mentor->id,
+            'mentor_name' => $mentor->name,
+            'title' => 'Sesi Mentoring',
+            'course_name' => 'Full-Stack Bootcamp',
+            'session_type' => 'reguler',
+            'scheduled_date' => now()->addDay()->format('Y-m-d'),
+            'start_time' => '19:00',
+            'duration_minutes' => 60,
+            'meeting_url' => 'https://meet.google.com/abc',
+            'is_finished' => false,
+        ], $overrides));
+    }
+
+    public function test_create_schedule_does_not_fill_dummy_values(): void
+    {
+        $response = $this->actingAs($this->mentor, 'sanctum')
+            ->postJson('/api/v1/schedules', [
+                'title' => 'Sesi Tanpa Kursus',
+                'session_type' => 'webinar',
+                'scheduled_date' => now()->addDay()->format('Y-m-d'),
+                'start_time' => '19:00',
+                'meeting_url' => 'https://meet.google.com/no-course',
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('data.mentor_name', 'Budi Mentor')
+            ->assertJsonPath('data.course_name', null)
+            ->assertJsonPath('data.notes', null)
+            ->assertJsonPath('data.attendees_count', 0);
+    }
+
+    public function test_create_schedule_validates_input(): void
+    {
+        $this->actingAs($this->mentor, 'sanctum')
+            ->postJson('/api/v1/schedules', [
+                'title' => '',
+                'session_type' => 'tidak-valid',
+                'meeting_url' => 'bukan-url',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['title', 'session_type', 'scheduled_date', 'start_time', 'meeting_url']);
+    }
+
+    public function test_non_mentor_roles_cannot_manage_schedules(): void
+    {
+        $schedule = $this->makeSchedule($this->mentor);
+
+        foreach (['siswa', 'karyawan', 'lembaga_bimbingan'] as $roleName) {
+            $user = User::factory()->create();
+            $user->assignRole($roleName);
+
+            $this->actingAs($user, 'sanctum')
+                ->postJson('/api/v1/schedules', [])
+                ->assertStatus(403);
+            $this->actingAs($user, 'sanctum')
+                ->patchJson("/api/v1/schedules/{$schedule->id}/toggle-finished")
+                ->assertStatus(403);
+            $this->actingAs($user, 'sanctum')
+                ->deleteJson("/api/v1/schedules/{$schedule->id}")
+                ->assertStatus(403);
+        }
+
+        $this->assertDatabaseHas('mentor_schedules', ['id' => $schedule->id, 'is_finished' => false]);
+    }
+
+    public function test_karyawan_can_view_but_lembaga_cannot_view_schedules(): void
+    {
+        $this->makeSchedule($this->mentor);
+
+        $karyawan = User::factory()->create();
+        $karyawan->assignRole('karyawan');
+        $this->actingAs($karyawan, 'sanctum')
+            ->getJson('/api/v1/schedules')
+            ->assertStatus(200)
+            ->assertJsonCount(1, 'data');
+
+        $lembaga = User::factory()->create();
+        $lembaga->assignRole('lembaga_bimbingan');
+        $this->actingAs($lembaga, 'sanctum')
+            ->getJson('/api/v1/schedules')
+            ->assertStatus(403);
+    }
+
+    public function test_mentor_cannot_modify_another_mentors_schedule(): void
+    {
+        $otherMentor = User::factory()->create();
+        $otherMentor->assignRole('mentor');
+        $schedule = $this->makeSchedule($otherMentor);
+
+        $this->actingAs($this->mentor, 'sanctum')
+            ->patchJson("/api/v1/schedules/{$schedule->id}/toggle-finished")
+            ->assertStatus(403);
+        $this->actingAs($this->mentor, 'sanctum')
+            ->deleteJson("/api/v1/schedules/{$schedule->id}")
+            ->assertStatus(403);
+
+        $this->assertDatabaseHas('mentor_schedules', ['id' => $schedule->id, 'is_finished' => false]);
+    }
+
+    public function test_admin_can_delete_any_schedule(): void
+    {
+        $schedule = $this->makeSchedule($this->mentor);
+
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+
+        $this->actingAs($admin, 'sanctum')
+            ->deleteJson("/api/v1/schedules/{$schedule->id}")
+            ->assertStatus(200);
+
+        $this->assertDatabaseMissing('mentor_schedules', ['id' => $schedule->id]);
+    }
 }
