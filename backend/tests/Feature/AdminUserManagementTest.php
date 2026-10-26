@@ -26,6 +26,24 @@ class AdminUserManagementTest extends TestCase
         $this->siswaRole = Role::where('name', 'siswa')->firstOrFail();
     }
 
+    public function test_empty_filters_list_all_users(): void
+    {
+        $inactive = User::factory()->create(['is_active' => false]);
+        $inactive->assignRole('siswa');
+
+        // Same query string the admin page sends when "Semua Peran" / "Semua Status" is selected
+        $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/v1/admin/users?search=&role=&is_active=&page=1&per_page=10')
+            ->assertStatus(200)
+            ->assertJsonPath('meta.total', 2);
+
+        $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/v1/admin/users?is_active=0')
+            ->assertStatus(200)
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $inactive->id);
+    }
+
     public function test_admin_can_create_new_user(): void
     {
         $payload = [

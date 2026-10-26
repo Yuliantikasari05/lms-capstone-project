@@ -39,8 +39,8 @@ class UserController extends Controller
             $query->whereHas('roles', fn ($q) => $q->where('name', $roleName));
         }
 
-        // Filter by active status
-        if ($request->has('is_active') && $request->input('is_active') !== '') {
+        // Filter by active status ("is_active=" from the "Semua Status" option arrives as null)
+        if ($request->filled('is_active')) {
             $isActive = filter_var($request->input('is_active'), FILTER_VALIDATE_BOOLEAN);
             $query->where('is_active', $isActive);
         }
