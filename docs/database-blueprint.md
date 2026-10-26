@@ -147,6 +147,51 @@ Menghubungkan peran dengan hak akses operasional (Many-to-Many).
 
 ---
 
+### 2.6. Tabel `mentor_schedules`
+Jadwal sesi bimbingan live dan webinar yang dibuat mentor.
+
+| Kolom | Tipe Data | Modifiers | Deskripsi |
+|---|---|---|---|
+| `id` | `BIGSERIAL` | `PRIMARY KEY` | Identifier unik jadwal |
+| `mentor_id` | `BIGINT` | `NULLABLE` | `FOREIGN KEY REFERENCES users(id) ON DELETE SET NULL`; pemilik jadwal untuk cek kepemilikan |
+| `mentor_name` | `VARCHAR(255)` | `NOT NULL` | Nama mentor saat jadwal dibuat |
+| `title` | `VARCHAR(255)` | `NOT NULL` | Judul sesi |
+| `course_name` | `VARCHAR(255)` | `NULLABLE` | Nama kursus terkait (akan diganti `course_id` pada C8) |
+| `session_type` | `VARCHAR(255)` | `NOT NULL, DEFAULT 'reguler'` | `reguler` / `webinar` / `korporat` |
+| `scheduled_date` | `DATE` | `NOT NULL` | Tanggal sesi |
+| `start_time` | `VARCHAR(255)` | `NOT NULL, DEFAULT '19:30'` | Jam mulai (`HH:MM`) |
+| `duration_minutes` | `INTEGER` | `NOT NULL, DEFAULT 90` | Durasi sesi |
+| `meeting_url` | `VARCHAR(255)` | `NOT NULL` | Tautan meeting |
+| `notes` | `TEXT` | `NULLABLE` | Catatan untuk peserta |
+| `attendees_count` | `INTEGER` | `NOT NULL, DEFAULT 0` | Jumlah peserta hadir |
+| `is_finished` | `BOOLEAN` | `NOT NULL, DEFAULT FALSE` | Status sesi selesai |
+| `created_at` / `updated_at` | `TIMESTAMP` | `NULLABLE` | Waktu pencatatan & pembaruan |
+
+---
+
+### 2.7. Tabel `certifications`
+Pengajuan sertifikasi kompetensi karyawan dan sertifikat yang diterbitkan.
+
+| Kolom | Tipe Data | Modifiers | Deskripsi |
+|---|---|---|---|
+| `id` | `BIGSERIAL` | `PRIMARY KEY` | Identifier unik pengajuan |
+| `user_id` | `BIGINT` | `NOT NULL` | `FOREIGN KEY REFERENCES users(id) ON DELETE CASCADE`; karyawan pengaju |
+| `employee_name` | `VARCHAR(255)` | `NOT NULL` | Nama karyawan saat mengajukan |
+| `email` | `VARCHAR(255)` | `NOT NULL` | Email karyawan saat mengajukan |
+| `company` | `VARCHAR(255)` | `NULLABLE` | Nama perusahaan (opsional) |
+| `track` | `VARCHAR(255)` | `NOT NULL` | Bidang kompetensi yang diajukan |
+| `training_hours` | `INTEGER` | `NOT NULL, DEFAULT 40` | Jam pelatihan |
+| `portfolio_url` | `VARCHAR(255)` | `NOT NULL` | Tautan portofolio |
+| `status` | `VARCHAR` (enum) | `NOT NULL, DEFAULT 'pending'` | `pending` → `verified` → `issued` / `rejected` |
+| `certificate_number` | `VARCHAR(255)` | `NULLABLE, UNIQUE` | Nomor sertifikat saat diterbitkan |
+| `issued_at` | `TIMESTAMP` | `NULLABLE` | Waktu terbit |
+| `admin_notes` | `TEXT` | `NULLABLE` | Catatan admin (wajib saat menolak) |
+| `created_at` / `updated_at` | `TIMESTAMP` | `NULLABLE` | Waktu pencatatan & pembaruan |
+
+- Migration `2026_10_25_000001_remove_dummy_defaults_from_schedules_and_certifications` menghapus default contoh (`'Budi Mentor'`, `'Tech Corp Nusantara'`, dll.) agar semua nilai berasal dari input nyata.
+
+---
+
 ## 3. Strategi Pengindeksan & Integritas Relasional
 
 1. **Foreign Key Cascade Deletion**:

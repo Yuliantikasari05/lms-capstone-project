@@ -206,4 +206,88 @@ class CertificationApiTest extends TestCase
 
         $response->assertStatus(403);
     }
+
+    public function test_apply_certification_validates_input(): void
+    {
+        $this->actingAs($this->karyawan, 'sanctum')
+            ->postJson('/api/v1/certifications', [
+                'track' => '',
+                'training_hours' => 0,
+                'portfolio_url' => 'bukan-url',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['track', 'training_hours', 'portfolio_url']);
+    }
+
+    public function test_company_is_not_filled_with_dummy_value(): void
+    {
+        $this->actingAs($this->karyawan, 'sanctum')
+            ->postJson('/api/v1/certifications', [
+                'track' => 'Cloud DevOps',
+                'training_hours' => 40,
+                'portfolio_url' => 'https://github.com/ahmadfauzi/k8s',
+            ])
+            ->assertStatus(201)
+            ->assertJsonPath('data.company', null);
+    }
+
+    public function test_roles_without_certification_permission_are_forbidden(): void
+    {
+        foreach (['mentor', 'siswa', 'lembaga_bimbingan'] as $roleName) {
+            $user = User::factory()->create();
+            $user->assignRole($roleName);
+
+            $this->actingAs($user, 'sanctum')
+                ->getJson('/api/v1/certifications')
+                ->assertStatus(403);
+
+            $this->actingAs($user, 'sanctum')
+                ->postJson('/api/v1/certifications', [
+                    'track' => 'Cloud DevOps',
+                    'training_hours' => 40,
+                    'portfolio_url' => 'https://github.com/x/y',
+                ])
+                ->assertStatus(403);
+        }
+    }
+
+    public function test_mentor_cannot_reject_certification(): void
+    {
+        $cert = Certification::create([
+            'user_id' => $this->karyawan->id,
+            'employee_name' => $this->karyawan->name,
+            'email' => $this->karyawan->email,
+            'track' => 'Cloud DevOps',
+            'training_hours' => 45,
+            'portfolio_url' => 'https://github.com/ahmadfauzi/k8s',
+            'status' => 'pending',
+        ]);
+
+        $mentor = User::factory()->create();
+        $mentor->assignRole('mentor');
+
+        $this->actingAs($mentor, 'sanctum')
+            ->postJson("/api/v1/certifications/{$cert->id}/reject", ['notes' => 'Tidak valid.'])
+            ->assertStatus(403);
+
+        $this->assertDatabaseHas('certifications', ['id' => $cert->id, 'status' => 'pending']);
+    }
+
+    public function test_reject_requires_notes(): void
+    {
+        $cert = Certification::create([
+            'user_id' => $this->karyawan->id,
+            'employee_name' => $this->karyawan->name,
+            'email' => $this->karyawan->email,
+            'track' => 'Cloud DevOps',
+            'training_hours' => 45,
+            'portfolio_url' => 'https://github.com/ahmadfauzi/k8s',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/v1/certifications/{$cert->id}/reject")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['notes']);
+    }
 }

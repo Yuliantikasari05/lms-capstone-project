@@ -121,4 +121,25 @@ class AuthTest extends TestCase
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
+
+    public function test_login_is_rate_limited_after_five_failed_attempts(): void
+    {
+        User::factory()->create([
+            'email' => 'bruteforce@maxy.test',
+            'password' => Hash::make('password123'),
+        ]);
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson('/api/v1/auth/login', [
+                'email' => 'bruteforce@maxy.test',
+                'password' => 'wrongpassword',
+            ])->assertStatus(422);
+        }
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'bruteforce@maxy.test',
+            'password' => 'password123',
+        ])->assertStatus(429)
+            ->assertJsonPath('success', false);
+    }
 }

@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Database\Seeder;
+use InvalidArgumentException;
 
 class RbacSeeder extends Seeder
 {
@@ -164,7 +165,7 @@ class RbacSeeder extends Seeder
                 'description' => 'Peserta pelatihan dan webinar untuk pengembangan kompetensi: akses materi pelatihan & webinar, pembayaran bila berlaku, evaluasi kompetensi, penilaian & feedback mentor, laporan riwayat belajar, dan pengajuan sertifikasi.',
                 'permissions' => [
                     'dashboard:karyawan',
-                    'training:view',
+                    'courses:enrolled',
                     'webinars:attend',
                     'payments:make',
                     'evaluations:submit',
@@ -209,9 +210,11 @@ class RbacSeeder extends Seeder
 
             $permIds = [];
             foreach ($r['permissions'] as $permName) {
-                if (isset($permissionModels[$permName])) {
-                    $permIds[] = $permissionModels[$permName]->id;
+                // Fail loudly so a role is never mapped to an undefined permission
+                if (! isset($permissionModels[$permName])) {
+                    throw new InvalidArgumentException("Permission '{$permName}' untuk role '{$r['name']}' belum didefinisikan.");
                 }
+                $permIds[] = $permissionModels[$permName]->id;
             }
             $role->permissions()->sync($permIds);
         }

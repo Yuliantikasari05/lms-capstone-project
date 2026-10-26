@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MentorSchedule;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class ScheduleController extends Controller
 {
@@ -53,16 +54,16 @@ class ScheduleController extends Controller
 
         $schedule = MentorSchedule::create([
             'mentor_id' => $user->id,
-            'mentor_name' => $user->name ?? 'Budi Mentor',
+            'mentor_name' => $user->name,
             'title' => $validated['title'],
-            'course_name' => $validated['course_name'] ?? 'Full-Stack Web Development Bootcamp',
+            'course_name' => $validated['course_name'] ?? null,
             'session_type' => $validated['session_type'],
             'scheduled_date' => $validated['scheduled_date'],
             'start_time' => $validated['start_time'],
             'duration_minutes' => $validated['duration_minutes'] ?? 90,
             'meeting_url' => $validated['meeting_url'],
-            'notes' => $validated['notes'] ?? 'Silakan bergabung 5 menit sebelum sesi dimulai.',
-            'attendees_count' => rand(15, 35),
+            'notes' => $validated['notes'] ?? null,
+            'attendees_count' => 0,
             'is_finished' => false,
         ]);
 
@@ -78,6 +79,8 @@ class ScheduleController extends Controller
      */
     public function toggleFinished(Request $request, MentorSchedule $schedule): JsonResponse
     {
+        $this->ensureOwnsSchedule($request, $schedule);
+
         $schedule->update([
             'is_finished' => ! $schedule->is_finished,
         ]);
@@ -96,11 +99,25 @@ class ScheduleController extends Controller
      */
     public function destroy(Request $request, MentorSchedule $schedule): JsonResponse
     {
+        $this->ensureOwnsSchedule($request, $schedule);
+
         $schedule->delete();
 
         return response()->json([
             'success' => true,
             'message' => 'Jadwal sesi bimbingan berhasil dihapus.',
         ]);
+    }
+
+    /**
+     * Admin may touch every schedule; a mentor only the sessions they host.
+     */
+    private function ensureOwnsSchedule(Request $request, MentorSchedule $schedule): void
+    {
+        $user = $request->user()->loadMissing('roles');
+
+        if (! $user->hasRole('admin') && $schedule->mentor_id !== $user->id) {
+            throw new AccessDeniedHttpException('Anda hanya dapat mengelola jadwal milik Anda sendiri.');
+        }
     }
 }

@@ -51,6 +51,16 @@ Dokumentasi spesifikasi endpoint, parameter request, format data respons JSON, d
 | 11 | `GET` | `/admin/users/{id}` | Wajib | `admin` | Mengambil data detail satu pengguna |
 | 12 | `PUT` | `/admin/users/{id}` | Wajib | `admin` | Memperbarui data pengguna, peran, atau status |
 | 13 | `DELETE`| `/admin/users/{id}` | Wajib | `admin` | Menghapus pengguna (dengan proteksi akun diri) |
+| 14 | `GET` | `/certifications` | Wajib | `certifications:view_own` \| `certifications:manage` | Daftar pengajuan sertifikasi (karyawan: milik sendiri; pengelola: semua) |
+| 15 | `POST` | `/certifications` | Wajib | `certifications:apply` | Mengajukan sertifikasi |
+| 16 | `POST` | `/certifications/{id}/approve` | Wajib | `certifications:manage` | Menerbitkan sertifikat |
+| 17 | `POST` | `/certifications/{id}/reject` | Wajib | `certifications:manage` | Menolak pengajuan (wajib `notes`) |
+| 18 | `GET` | `/schedules` | Wajib | `schedules:manage` \| `sessions:attend` \| `webinars:attend` | Daftar jadwal bimbingan & webinar |
+| 19 | `POST` | `/schedules` | Wajib | `schedules:manage` | Membuat jadwal sesi |
+| 20 | `PATCH` | `/schedules/{id}/toggle-finished` | Wajib | `schedules:manage` + pemilik jadwal | Menandai sesi selesai / aktif kembali |
+| 21 | `DELETE`| `/schedules/{id}` | Wajib | `schedules:manage` + pemilik jadwal | Menghapus jadwal |
+
+Hak akses yang dipisah `|` berarti cukup memiliki salah satu izin. Admin otomatis lolos semua izin dan cek kepemilikan.
 
 ---
 
@@ -130,6 +140,13 @@ Dokumentasi spesifikasi endpoint, parameter request, format data respons JSON, d
 {
   "success": false,
   "message": "Akun Anda dinonaktifkan oleh administrator. Silakan hubungi admin."
+}
+```
+- **Pembatasan Percobaan (429 Too Many Requests)**: maksimal 5 percobaan per menit untuk kombinasi email + IP. Header `Retry-After` berisi sisa detik.
+```json
+{
+  "success": false,
+  "message": "Terlalu banyak percobaan masuk. Silakan coba lagi dalam 1 menit."
 }
 ```
 
@@ -247,5 +264,58 @@ Dokumentasi spesifikasi endpoint, parameter request, format data respons JSON, d
 {
   "success": false,
   "message": "This action is unauthorized."
+}
+```
+
+---
+
+### 3.6. Sertifikasi Karyawan (`/certifications`)
+
+#### A. Ajukan Sertifikasi
+- **URL**: `POST /certifications` (izin `certifications:apply`)
+- **Request Body**:
+```json
+{
+  "track": "Cloud DevOps & Containerization",
+  "training_hours": 45,
+  "portfolio_url": "https://github.com/user/k8s",
+  "company": "PT Contoh (opsional)"
+}
+```
+- **Respons (201 Created)**: data pengajuan dengan `status: "pending"`. `company` bernilai `null` bila tidak diisi.
+
+#### B. Terbitkan / Tolak (Admin)
+- **URL**: `POST /certifications/{id}/approve` dengan body opsional `{ "notes": "..." }`. Status menjadi `issued` dan `certificate_number` terisi.
+- **URL**: `POST /certifications/{id}/reject` dengan body **wajib** `{ "notes": "alasan penolakan" }`. Tanpa `notes`, respons `422`.
+- Role tanpa izin `certifications:manage` mendapat `403`.
+
+---
+
+### 3.7. Jadwal Bimbingan & Webinar (`/schedules`)
+
+#### A. Buat Jadwal
+- **URL**: `POST /schedules` (izin `schedules:manage`)
+- **Request Body**:
+```json
+{
+  "title": "Live Coding React",
+  "course_name": "Full-Stack Bootcamp (opsional)",
+  "session_type": "reguler",
+  "scheduled_date": "2026-11-01",
+  "start_time": "19:30",
+  "duration_minutes": 90,
+  "meeting_url": "https://meet.google.com/abc-defg-hij",
+  "notes": "opsional"
+}
+```
+- `session_type`: `reguler` | `webinar` | `korporat`. `mentor_name` diambil dari akun yang login, `attendees_count` dimulai dari `0`, dan field opsional yang kosong disimpan `null`.
+- **Respons (201 Created)**: data jadwal.
+
+#### B. Ubah Status / Hapus
+- `PATCH /schedules/{id}/toggle-finished` dan `DELETE /schedules/{id}` hanya untuk mentor pembuat jadwal (atau admin). Mentor lain mendapat `403`:
+```json
+{
+  "success": false,
+  "message": "Anda hanya dapat mengelola jadwal milik Anda sendiri."
 }
 ```
